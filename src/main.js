@@ -446,7 +446,12 @@ async function main(userlandRW) {
 
   if (result.payloads) {
     log("kernel exploit complete", "info");
-    log("elfldr is listening on 127.0.0.1:9021", "info");
+    let address = "";
+    try {
+      const response = await fetch("/client-ip", { cache: "no-store" });
+      if (response.ok) address = (await response.text()).trim();
+    } catch (_) {}
+    log(address ? `elfldr is listening on ${address}:9021` : "elfldr is listening on port 9021", "info");
   } else {
     log("kernel chain complete: root and sandbox escape are active", "info");
   }

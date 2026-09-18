@@ -1,4 +1,4 @@
-# PS5 WebKit and AIO Exploit
+# PS5 WebKit and Relapse Exploit
 Supported firmware: 11.60, 12.00, 12.02, 12.20, 12.40, 12.60, 12.70, 13.00, 13.20, 13.40, 13.42, and 13.60.
 
 ## Usage

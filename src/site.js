@@ -77,7 +77,7 @@ async function run() {
     return;
   }
 
-  await import("/src/aio_exploit.js");
+  await import("/src/relapse_exploit.js");
   await main(primitive);
 }
 

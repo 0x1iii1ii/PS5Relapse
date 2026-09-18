@@ -109,9 +109,9 @@ async function findWorkerStack(p, libKernelBase) {
   } else {
     // ?threadlist=0xHEX hard-override (fast lane once the value is known)
     const forced =
-      (typeof window.AIO_CFG === "object" &&
-        window.AIO_CFG !== null &&
-        window.AIO_CFG.threadlist) ||
+      (typeof window.RELAPSE_CFG === "object" &&
+        window.RELAPSE_CFG !== null &&
+        window.RELAPSE_CFG.threadlist) ||
       (/threadlist=0x([0-9a-f]+)/i.exec(location.search) || [])[1] ||
       null;
     if (forced) {
@@ -434,11 +434,11 @@ async function main(userlandRW) {
 
   let runExploit = globalThis.runAioExploit;
   if (typeof runExploit !== "function") {
-    const module = await import("./aio_exploit.js");
+    const module = await import("./relapse_exploit.js");
     runExploit = module.runKernelExploit;
   }
   if (typeof runExploit !== "function")
-    throw new Error("aio_exploit.js does not export runKernelExploit");
+    throw new Error("relapse_exploit.js does not export runKernelExploit");
 
   const result = await runExploit(p, chain, log);
   if (!result || !result.done)

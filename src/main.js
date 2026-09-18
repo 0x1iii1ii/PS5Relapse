@@ -444,9 +444,11 @@ async function main(userlandRW) {
   if (!result || !result.done)
     throw new Error("kernel exploit did not finish");
 
-  if (result.kstuff) {
+  if (result.payloads) {
     log("kernel exploit complete", "info");
-    log("kstuff loaded, elfldr is listening on 127.0.0.1:9021", "info");
+    log("kstuff loaded", "info");
+    log("shadowmountplus loaded", "info");
+    log("elfldr is listening on 127.0.0.1:9021", "info");
   } else {
     log("kernel chain complete: root and sandbox escape are active", "info");
   }

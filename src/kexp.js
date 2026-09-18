@@ -7,6 +7,7 @@ const MAP_SHARED = 0x1, MAP_PRIVATE_ANON = 0x1002;
 const DEFAULT_KEXP = "kexp_2026_05_25.bin";
 const DEFAULT_ELFLDR = "elfldr-ps5-1360.elf";
 const DEFAULT_KSTUFF = "kstuff.elf";
+const DEFAULT_SHADOWMOUNT = "shadowmountplus.elf";
 
 const BLOB = {
   size: 18912,
@@ -135,7 +136,7 @@ async function connectToElfldr(p, chain) {
   throw new Error("kexp: elfldr is not listening on port 9021");
 }
 
-async function sendElf(payload, p, chain) {
+async function sendElf(name, payload, p, chain) {
   const fd = await connectToElfldr(p, chain);
 
   try {
@@ -144,7 +145,7 @@ async function sendElf(payload, p, chain) {
       const length = Math.min(0x10000, payload.size - offset);
       const result = await chain.syscall(SYS_WRITE, fd, payload.base.add32(offset), length);
       const written = result.low | 0;
-      if (written <= 0) throw new Error("kexp: kstuff socket write failed");
+      if (written <= 0) throw new Error("kexp: " + name + " socket write failed");
       offset += written;
     }
   } finally {
@@ -282,6 +283,7 @@ export async function runKexp(krw, p, chain, log, config = {}) {
   const symbols = resolveSymbols(p);
 
   const elfldr = await mapElf(config.elfldr || DEFAULT_ELFLDR, p, chain);
+  const shadowmount = await mapElf(config.shadowmount || DEFAULT_SHADOWMOUNT, p, chain);
   const kstuff = await mapElf(config.kstuff || DEFAULT_KSTUFF, p, chain);
 
   const blob = await fetchBinary(config.kexp || DEFAULT_KEXP);
@@ -307,7 +309,11 @@ export async function runKexp(krw, p, chain, log, config = {}) {
     throw new Error("kexp: pthread_join returned " + hex(result.joinResult));
   say("elfldr returned " + hex(result.shellcodeResult));
 
-  await sendElf(kstuff, p, chain);
+  await sendElf("kstuff", kstuff, p, chain);
   say("kstuff sent");
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+
+  await sendElf("shadowmountplus", shadowmount, p, chain);
+  say("shadowmountplus sent");
   return true;
 }

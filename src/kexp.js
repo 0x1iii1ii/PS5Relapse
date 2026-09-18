@@ -6,8 +6,6 @@ const MAP_SHARED = 0x1, MAP_PRIVATE_ANON = 0x1002;
 
 const DEFAULT_KEXP = "kexp_2026_05_25.bin";
 const DEFAULT_ELFLDR = "elfldr-ps5-1360.elf";
-const DEFAULT_KSTUFF = "kstuff.elf";
-const DEFAULT_SHADOWMOUNT = "shadowmountplus.elf";
 
 const BLOB = {
   size: 18912,
@@ -113,44 +111,6 @@ async function mapElf(name, p, chain) {
     throw new Error("kexp: " + name + " copy failed");
 
   return { base, size: elf.length };
-}
-
-async function connectToElfldr(p, chain) {
-  const address = p.malloc(16);
-  p.write8(address, new int64(0, 0));
-  p.write8(address.add32(8), new int64(0, 0));
-  p.write4(address, 0x3d230210); // sockaddr_in: AF_INET, port 9021
-  p.write4(address.add32(4), 0x0100007f); // 127.0.0.1
-
-  for (let attempt = 0; attempt < 40; attempt++) {
-    const socket = await chain.syscall(SYS_SOCKET, 2, 1, 0);
-    const fd = socket.low | 0;
-    if (fd >= 0) {
-      const connected = await chain.syscall(SYS_CONNECT, fd, address, 16);
-      if ((connected.low >>> 0) === 0) return fd;
-      await chain.syscall(SYS_CLOSE, fd);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-
-  throw new Error("kexp: elfldr is not listening on port 9021");
-}
-
-async function sendElf(name, payload, p, chain) {
-  const fd = await connectToElfldr(p, chain);
-
-  try {
-    let offset = 0;
-    while (offset < payload.size) {
-      const length = Math.min(0x10000, payload.size - offset);
-      const result = await chain.syscall(SYS_WRITE, fd, payload.base.add32(offset), length);
-      const written = result.low | 0;
-      if (written <= 0) throw new Error("kexp: " + name + " socket write failed");
-      offset += written;
-    }
-  } finally {
-    await chain.syscall(SYS_CLOSE, fd);
-  }
 }
 
 function patchShellcode(blob, symbols) {
@@ -283,8 +243,6 @@ export async function runKexp(krw, p, chain, log, config = {}) {
   const symbols = resolveSymbols(p);
 
   const elfldr = await mapElf(config.elfldr || DEFAULT_ELFLDR, p, chain);
-  const shadowmount = await mapElf(config.shadowmount || DEFAULT_SHADOWMOUNT, p, chain);
-  const kstuff = await mapElf(config.kstuff || DEFAULT_KSTUFF, p, chain);
 
   const blob = await fetchBinary(config.kexp || DEFAULT_KEXP);
   patchShellcode(blob, symbols);
@@ -308,12 +266,5 @@ export async function runKexp(krw, p, chain, log, config = {}) {
   if (result.joinResult !== 0)
     throw new Error("kexp: pthread_join returned " + hex(result.joinResult));
   say("elfldr returned " + hex(result.shellcodeResult));
-
-  await sendElf("kstuff", kstuff, p, chain);
-  say("kstuff sent");
-  await new Promise((resolve) => setTimeout(resolve, 3000));
-
-  await sendElf("shadowmountplus", shadowmount, p, chain);
-  say("shadowmountplus sent");
   return true;
 }

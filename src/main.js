@@ -446,8 +446,6 @@ async function main(userlandRW) {
 
   if (result.payloads) {
     log("kernel exploit complete", "info");
-    log("kstuff loaded", "info");
-    log("shadowmountplus loaded", "info");
     log("elfldr is listening on 127.0.0.1:9021", "info");
   } else {
     log("kernel chain complete: root and sandbox escape are active", "info");

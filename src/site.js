@@ -2,7 +2,6 @@ import { establishPrimitive } from "/src/webkit.js";
 import { installWindowP } from "/src/utils/mem.js";
 
 const output = document.getElementById("console");
-const kernelExploitEnabled = true;
 
 function writeLog(message, type = "log", replace = false) {
   let line = replace ? output.lastElementChild : null;
@@ -18,21 +17,16 @@ function writeLog(message, type = "log", replace = false) {
 }
 
 function writeEvent(name, detail) {
-  let message = name;
-  if (detail !== undefined && detail !== null && detail !== "")
-    message += `: ${detail}`;
-  const type = name === "Failed" ? "error" : "log";
-  writeLog(message, type);
+  writeLog(detail == null || detail === "" ? name : `${name}: ${detail}`,
+    name === "Failed" ? "error" : "log");
 }
 
 window.writeLog = writeLog;
 window.jb = { mark: writeEvent };
-window.populatePayloadsPage = () => {};
 
 async function getPrimitive() {
   writeLog("Starting WebKit exploit");
-  const carrier = await establishPrimitive(writeEvent);
-  const primitive = installWindowP(carrier);
+  const primitive = installWindowP(await establishPrimitive(writeEvent));
   if (!primitive || typeof primitive.read8 !== "function")
     throw new Error("memory primitive unavailable");
 
@@ -41,23 +35,14 @@ async function getPrimitive() {
 }
 
 function getWebKitBase() {
-  const constructor = globalThis.__ps5NativeCtor;
-  if (
-    typeof constructor !== "number" ||
-    typeof OFFSET_wk_host_constructor_candidates === "undefined"
-  ) {
+  const ctor = globalThis.__ps5NativeCtor;
+  if (typeof ctor !== "number" || typeof OFFSET_wk_host_constructor_candidates === "undefined")
     throw new Error("WebKit base inputs are unavailable");
-  }
 
   for (const offset of OFFSET_wk_host_constructor_candidates) {
-    const base = constructor - offset;
-    if (
-      base >= 0x800000000 &&
-      base < 0x900000000 &&
-      base % 0x4000 === 0
-    ) {
+    const base = ctor - offset;
+    if (base >= 0x800000000 && base < 0x900000000 && base % 0x4000 === 0)
       return base;
-    }
   }
 
   throw new Error("WebKit base not found");
@@ -72,16 +57,8 @@ async function run() {
   const primitive = await getPrimitive();
   writeLog(`WebKit base: 0x${getWebKitBase().toString(16)}`, "info");
 
-  if (!kernelExploitEnabled) {
-    writeLog("Kernel exploit disabled", "info");
-    return;
-  }
-
   await import("/src/relapse_exploit.js");
   await main(primitive);
 }
 
-run().catch((error) => {
-  const message = error instanceof Error ? error.message : String(error);
-  writeLog(message, "error");
-});
+run().catch((error) => writeLog(error instanceof Error ? error.message : String(error), "error"));

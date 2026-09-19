@@ -7,7 +7,7 @@ const MAP_SHARED = 0x1, MAP_PRIVATE_ANON = 0x1002;
 const DEFAULT_KEXP = "kexp_2026_05_25.bin";
 const DEFAULT_ELFLDR = "elfldr-ps5-1360.elf";
 
-const BLOB = {
+const SHELLCODE = {
   size: 18912,
   resolverCalls: [
     [0x1c, [0xe8, 0xcf, 0x00, 0x00, 0x00]],
@@ -15,31 +15,34 @@ const BLOB = {
   ],
   getpid: {
     at: 0x10f1,
-    bytes: [0x48, 0x8d, 0x35, 0xac, 0x30, 0x00, 0x00, 0x48, 0x8d, 0x55, 0xd0, 0xbf, 0x01, 0x20, 0x00, 0x00, 0xe8, 0x41, 0x2b, 0x00, 0x00],
+    bytes: [
+      0x48, 0x8d, 0x35, 0xac, 0x30, 0x00, 0x00,
+      0x48, 0x8d, 0x55, 0xd0, 0xbf, 0x01, 0x20, 0x00, 0x00,
+      0xe8, 0x41, 0x2b, 0x00, 0x00,
+    ],
     tail: [0x48, 0x89, 0x45, 0xd0, 0x31, 0xc0],
     tailAt: 0x10fb,
     padFrom: 0x1101,
     padTo: 0x1106,
   },
   logCalls: [0x126d, 0x12ad, 0x3bc2],
-  pointers: [
-    [0x48b0, "libkernel", "sceKernelSendNotificationRequest"],
-    [0x48b8, "libkernel", "sysctlbyname"],
-    [0x48c0, "libkernel", "pthread_create"],
-    [0x48c8, "libkernel", "pthread_join"],
-    [0x48d0, "libc", "malloc"],
-    [0x48d8, "libc", "free"],
-    [0x48e0, "libc", "memcpy"],
-    [0x48e8, "libc", "memset"],
-    [0x48f0, "libc", "strcmp"],
-    [0x48f8, "libc", "memcmp"],
-    [0x4900, "libc", "vsnprintf"],
-  ],
-};
-
-const REQUIRED_SYMBOLS = {
-  libkernel: ["sceKernelSendNotificationRequest", "sysctlbyname", "pthread_create", "pthread_join", "getpid"],
-  libc: ["malloc", "free", "memcpy", "memset", "strcmp", "memcmp", "vsnprintf"],
+  imports: {
+    libkernel: {
+      sceKernelSendNotificationRequest: 0x48b0,
+      sysctlbyname: 0x48b8,
+      pthread_create: 0x48c0,
+      pthread_join: 0x48c8,
+    },
+    libc: {
+      malloc: 0x48d0,
+      free: 0x48d8,
+      memcpy: 0x48e0,
+      memset: 0x48e8,
+      strcmp: 0x48f0,
+      memcmp: 0x48f8,
+      vsnprintf: 0x4900,
+    },
+  },
 };
 
 const PIPE = { count: 0x00, in: 0x04, out: 0x08, size: 0x0c, buffer: 0x10, defaultSize: 0x4000 };
@@ -71,13 +74,15 @@ function resolveSymbols(p) {
   const bases = { libkernel: p.libKernelBase, libc: p.libSceLibcInternalBase };
   const resolved = {};
 
-  for (const [group, names] of Object.entries(REQUIRED_SYMBOLS)) {
+  for (const [group, imports] of Object.entries(SHELLCODE.imports)) {
     const base = bases[group];
     const offsets = tables[group];
     if (!base || (base.low === 0 && base.hi === 0))
       throw new Error("kexp: " + group + " base is unresolved");
     if (!offsets) throw new Error("kexp: " + group + " symbols are missing");
 
+    const names = Object.keys(imports);
+    if (group === "libkernel") names.push("getpid");
     const missing = names.filter((name) => typeof offsets[name] !== "number");
     if (missing.length)
       throw new Error("kexp: " + group + " is missing " + missing.join(", "));
@@ -114,30 +119,31 @@ async function mapElf(name, p, chain) {
 }
 
 function patchShellcode(blob, symbols) {
-  if (blob.length !== BLOB.size)
-    throw new Error("kexp: expected " + BLOB.size + " bytes, got " + blob.length);
-  if (BLOB.resolverCalls.some(([offset, bytes]) => !matches(blob, offset, bytes)) ||
-      !matches(blob, BLOB.getpid.at, BLOB.getpid.bytes))
+  if (blob.length !== SHELLCODE.size)
+    throw new Error("kexp: expected " + SHELLCODE.size + " bytes, got " + blob.length);
+  if (SHELLCODE.resolverCalls.some(([offset, bytes]) => !matches(blob, offset, bytes)) ||
+      !matches(blob, SHELLCODE.getpid.at, SHELLCODE.getpid.bytes))
     throw new Error("kexp: shellcode signature does not match");
 
-  for (const [offset] of BLOB.resolverCalls)
+  for (const [offset] of SHELLCODE.resolverCalls)
     for (let i = 0; i < 5; i++) blob[offset + i] = 0x90;
 
   const addressOf = (group, name) => {
     const { base, offsets } = symbols[group];
     return (BigInt(base.hi) << 32n) + BigInt(base.low >>> 0) + BigInt(offsets[name]);
   };
-  for (const [offset, group, name] of BLOB.pointers)
-    writeU64(blob, offset, addressOf(group, name));
+  for (const [group, imports] of Object.entries(SHELLCODE.imports))
+    for (const [name, offset] of Object.entries(imports))
+      writeU64(blob, offset, addressOf(group, name));
 
-  const { at, tail, tailAt, padFrom, padTo } = BLOB.getpid;
+  const { at, tail, tailAt, padFrom, padTo } = SHELLCODE.getpid;
   blob[at] = 0x48;
   blob[at + 1] = 0xb8;
   writeU64(blob, at + 2, addressOf("libkernel", "getpid"));
   tail.forEach((byte, index) => blob[tailAt + index] = byte);
   for (let i = padFrom; i < padTo; i++) blob[i] = 0x90;
 
-  for (const offset of BLOB.logCalls)
+  for (const offset of SHELLCODE.logCalls)
     if (blob[offset] === 0xe8)
       for (let i = 0; i < 5; i++) blob[offset + i] = 0x90;
 }

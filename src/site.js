@@ -1,5 +1,5 @@
-import { establishPrimitive } from "/src/webkit.js";
-import { installWindowP } from "/src/utils/mem.js";
+import { establishPrimitive } from "./webkit.js";
+import { installWindowP } from "./utils/mem.js";
 
 const output = document.getElementById("console");
 
@@ -57,7 +57,7 @@ async function run() {
   const primitive = await getPrimitive();
   writeLog(`WebKit base: 0x${getWebKitBase().toString(16)}`, "info");
 
-  await import("/src/relapse_exploit.js");
+  await import("./relapse_exploit.js");
   await main(primitive);
 }
 

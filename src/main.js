@@ -166,7 +166,7 @@ async function prepareRop(p) {
     p.write1(waddr, 0x0);
   }
 
-  const worker = new Worker("/src/utils/rop_slave.js");
+  const worker = new Worker("./src/utils/rop_slave.js");
 
   async function waitForWorker() {
     return new Promise((resolve, reject) => {
@@ -269,10 +269,12 @@ async function main(userlandRW) {
   if (result.payloads) {
     log("kernel exploit complete", "info");
     let address = "";
-    try {
-      const response = await fetch("/client-ip", { cache: "no-store" });
-      if (response.ok) address = (await response.text()).trim();
-    } catch (_) {}
+    if (location.port === "8000") {
+      try {
+        const response = await fetch("./client-ip", { cache: "no-store" });
+        if (response.ok) address = (await response.text()).trim();
+      } catch (_) {}
+    }
     log(address ? `elfldr is listening on ${address}:9021` : "elfldr is listening on port 9021", "info");
   } else {
     log("kernel chain complete: root and sandbox escape are active", "info");

@@ -90,23 +90,15 @@ function allZero(bytes, start, end) {
 }
 
 function uint32At(bytes, offset) {
-  return (
-    bytes[offset] +
-    bytes[offset + 1] * 0x100 +
-    bytes[offset + 2] * 0x10000 +
-    bytes[offset + 3] * 0x1000000
-  );
+  const low16 = bytes[offset] + bytes[offset + 1] * 0x100;
+  const high16 = bytes[offset + 2] + bytes[offset + 3] * 0x100;
+  return low16 + high16 * 0x10000;
 }
 
 function low48At(bytes, offset) {
-  return (
-    bytes[offset] +
-    bytes[offset + 1] * 0x100 +
-    bytes[offset + 2] * 0x10000 +
-    bytes[offset + 3] * 0x1000000 +
-    bytes[offset + 4] * 0x100000000 +
-    bytes[offset + 5] * 0x10000000000
-  );
+  const low32 = uint32At(bytes, offset);
+  const high16 = bytes[offset + 4] + bytes[offset + 5] * 0x100;
+  return low32 + high16 * 0x100000000;
 }
 
 function readBytes(destination, source, count) {
@@ -138,11 +130,8 @@ function restoreView(candidate) {
 
 function pointerFromWords(words, offset) {
   if (words[offset + 3] !== 0) return NaN;
-  return (
-    words[offset] +
-    words[offset + 1] * 0x10000 +
-    words[offset + 2] * 0x100000000
-  );
+  const low32 = words[offset] + words[offset + 1] * 0x10000;
+  return low32 + words[offset + 2] * 0x100000000;
 }
 
 function plausibleCell(value) {
@@ -150,11 +139,9 @@ function plausibleCell(value) {
 }
 
 function plausibleAddress(value) {
-  return (
-    Number.isSafeInteger(value) &&
-    value > 0x100000000 &&
-    value <= 0xffffffffffff
-  );
+  return Number.isSafeInteger(value) &&
+    value > 2 ** 32 &&
+    value < 2 ** 48;
 }
 
 function canonicalLow48(bytes, offset) {
@@ -791,7 +778,6 @@ function finishAttempt(outcome, holderAddress) {
   if (resolve !== null) resolve(createMemoryWindow(holderAddress));
 }
 
-// This small interface is consumed by utils/mem.js.
 function createMemoryWindow(holderAddress) {
   return {
     setAddress(address) {
@@ -818,7 +804,6 @@ function createMemoryWindow(holderAddress) {
   };
 }
 
-// Public entry point. Placement retries continue until stage 5 succeeds.
 export function establishPrimitive(eventHandler = null) {
   if (settleResolve !== null)
     return Promise.reject(new Error("core: already running"));

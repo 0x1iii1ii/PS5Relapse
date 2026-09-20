@@ -28,7 +28,7 @@ async function getPrimitive() {
   writeLog("Starting WebKit exploit");
   const primitive = installWindowP(await establishPrimitive(writeEvent));
   if (!primitive || typeof primitive.read8 !== "function")
-    throw new Error("memory primitive unavailable");
+    throw new Error("Memory primitive unavailable");
 
   writeLog("ARW ready", "success");
   return primitive;

@@ -17,3 +17,5 @@ Run `python serve.py`, then open the printed URL on the PS5. The default payload
 - EchoStretch
 - Dr. Yenyen
 - Sleirsgoevy
+- TheFlow
+- EarthOnion

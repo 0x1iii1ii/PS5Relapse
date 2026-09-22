@@ -235,7 +235,7 @@ async function spawnAndJoin(entry, args, symbols, p, chain) {
   return { joinResult: joined.low >>> 0, shellcodeResult: p.read8(result) };
 }
 
-export async function runKexp(krw, p, chain, log, config = {}) {
+export async function runKexp(krw, p, chain, log) {
   const say = typeof log === "function" ? log : () => {};
   const allprocRva = window.KRW && window.KRW.allproc;
   if (!krw || !krw.ktextBase || !krw.procFdAddr)
@@ -248,9 +248,9 @@ export async function runKexp(krw, p, chain, log, config = {}) {
     throw new Error("kexp: invalid allproc address " + hex(allproc));
   const symbols = resolveSymbols(p);
 
-  const elfldr = await mapElf(config.elfldr || DEFAULT_ELFLDR, p, chain);
+  const elfldr = await mapElf(DEFAULT_ELFLDR, p, chain);
 
-  const blob = await fetchBinary(config.kexp || DEFAULT_KEXP);
+  const blob = await fetchBinary(DEFAULT_KEXP);
   patchShellcode(blob, symbols);
   const entry = await mapExecutable(blob, p, chain);
 

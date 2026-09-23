@@ -16,9 +16,9 @@ function writeLog(message, type = "log", replace = false) {
   output.scrollTop = output.scrollHeight;
 }
 
-function writeEvent(name, detail) {
+function writeEvent(name, detail, type) {
   writeLog(detail == null || detail === "" ? name : `${name}: ${detail}`,
-    name === "Failed" ? "error" : "log");
+    type || (name === "Failed" ? "error" : "log"));
 }
 
 window.writeLog = writeLog;

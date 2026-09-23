@@ -16,6 +16,8 @@ Browser stage uses JSC info leaks and a structured clone object pool mismatch to
 ## Collaborators / Credits
 ntfargo, ufm42, Sonic_Iso, Jordy, Dr. Yenyen, TheFlow, SlidyBat,  Flatz, cow, nhk, bollarz, Sleirsgoevy, EchoStretch, EarthOnion.
 
+Discord: [PS5 Research & Development](https://discord.gg/Eea73sskbC)
+
 ## Disclaimer
 This project is intended for **educational and security research purposes only**. It does not endorse piracy, unauthorized access, or misuse of commercial devices. Use it only on devices you own or are authorized to test, and comply with applicable laws and regulations.
 

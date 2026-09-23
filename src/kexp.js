@@ -118,6 +118,55 @@ async function mapElf(name, p, chain) {
   return { base, size: elf.length };
 }
 
+async function connectToElfldr(p, chain) {
+  const address = p.malloc(16);
+  p.write8(address, new int64(0, 0));
+  p.write8(address.add32(8), new int64(0, 0));
+  p.write4(address, 0x3d230210); // AF_INET, port 9021
+  p.write4(address.add32(4), 0x0100007f); // 127.0.0.1
+
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const socket = await chain.syscall(SYS_SOCKET, 2, 1, 0);
+    const fd = socket.low | 0;
+    if (fd >= 0) {
+      const connected = await chain.syscall(SYS_CONNECT, fd, address, 16);
+      if ((connected.low >>> 0) === 0) return fd;
+      await chain.syscall(SYS_CLOSE, fd);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+
+  throw new Error("elfldr is not listening on port 9021");
+}
+
+async function sendElf(name, payload, p, chain) {
+  const fd = await connectToElfldr(p, chain);
+  try {
+    for (let offset = 0; offset < payload.size;) {
+      const length = Math.min(0x10000, payload.size - offset);
+      const written = (await chain.syscall(SYS_WRITE, fd, payload.base.add32(offset), length)).low | 0;
+      if (written <= 0) throw new Error(name + " socket write failed");
+      offset += written;
+    }
+  } finally {
+    await chain.syscall(SYS_CLOSE, fd);
+  }
+}
+
+export async function loadOptionalPayloads(p, chain, log) {
+  log("preparing optional payloads");
+  const kstuff = await mapElf("kstuff.elf", p, chain);
+  const shadowmount = await mapElf("shadowmountplus.elf", p, chain);
+  const etaHEN = await mapElf("etaHEN.elf", p, chain);
+  await sendElf("kstuff.elf", kstuff, p, chain);
+  log("kstuff.elf sent");
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+  await sendElf("shadowmountplus.elf", shadowmount, p, chain);
+  log("shadowmountplus.elf sent");
+  await sendElf("etaHEN.elf", etaHEN, p, chain);
+  log("etaHEN.elf sent");
+}
+
 function patchShellcode(blob, symbols) {
   if (blob.length !== SHELLCODE.size)
     throw new Error("kexp: expected " + SHELLCODE.size + " bytes, got " + blob.length);

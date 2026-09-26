@@ -13,7 +13,7 @@ Webkit may need several attempts, reload the page if the browser stalls. The ker
 ## Exploit chain
 Browser stage uses JSC info leaks and a structured clone object pool mismatch to corrupt a typedarray. The kernel stage combines a address leak with an `aio_multi_wait` uaf race to establish kernel r/w.
 
-## Collaborators / Credits
+## Credits
 ntfargo, ufm42, Sonic_Iso, Jordy, Dr. Yenyen, TheFlow, SlidyBat,  Flatz, cow, nhk, bollarz, Sleirsgoevy, EchoStretch, EarthOnion.
 
 Discord: [PS5 Research & Development](https://discord.gg/Eea73sskbC)

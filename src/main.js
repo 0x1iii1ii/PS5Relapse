@@ -80,18 +80,6 @@ function log(message, type = "log") {
   window.writeLog(message, type);
 }
 
-function watchR2(onPress) {
-  function onKey(event) {
-    if (event.key !== "F8" || event.code !== "Unidentified") return;
-    window.removeEventListener("keydown", onKey, true);
-    event.preventDefault();
-    onPress();
-  }
-
-  log("press R2 to load kstuff, shadowmountplus and etaHEN", "info");
-  window.addEventListener("keydown", onKey, true);
-}
-
 const ROP_WAIT_MS = 20000;
 
 function jbmark(tag, detail) {
@@ -281,14 +269,10 @@ async function main(userlandRW) {
   if (result.payloads) {
     log("kernel exploit complete", "info");
     log("elfldr is listening on port 9021", "info");
-    watchR2(async () => {
-      try {
-        const { loadOptionalPayloads } = await import("./kexp.js");
-        await loadOptionalPayloads(p, chain, (message) => log(message, "info"));
-      } catch (error) {
-        log(error instanceof Error ? error.message : String(error), "error");
-      }
-    });
+    log("starting payload in 3 seconds...", "info");
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    const { loadOptionalPayloads } = await import("./kexp.js");
+    await loadOptionalPayloads(p, chain, (message) => log(message, "info"));
   } else {
     log("kernel chain complete: root and sandbox escape are active", "info");
   }
@@ -297,4 +281,4 @@ async function main(userlandRW) {
 const fwScript = document.createElement("script");
 document.body.appendChild(fwScript);
 
-fwScript.setAttribute("src", `offsets/${window.fw_str}.js?v=` + Date.now());
+fwScript.setAttribute("src", `offsets/${window.fw_str}.js`);

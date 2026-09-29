@@ -2,6 +2,9 @@ import { establishPrimitive } from "./webkit.js";
 import { installWindowP } from "./utils/mem.js";
 
 const output = document.getElementById("console");
+const jailbreakButton = document.getElementById("jailbreak-button");
+const currentFirmware = document.getElementById("current-firmware");
+currentFirmware.textContent = window.fw_str || "Not detected";
 
 function writeLog(message, type = "log", replace = false) {
   let line = replace ? output.lastElementChild : null;
@@ -62,4 +65,14 @@ async function run() {
   await main(primitive);
 }
 
-run().catch((error) => writeLog(error instanceof Error ? error.message : String(error), "error"));
+jailbreakButton.addEventListener("click", async () => {
+  jailbreakButton.disabled = true;
+  jailbreakButton.textContent = "Starting jailbreak…";
+  try {
+    await run();
+    jailbreakButton.textContent = "Jailbreak complete";
+  } catch (error) {
+    writeLog(error instanceof Error ? error.message : String(error), "error");
+    jailbreakButton.textContent = "Jailbreak failed — reload to retry";
+  }
+});

@@ -13,9 +13,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
-    def end_headers(self):
-        self.send_header("Cache-Control", "no-store")
-        super().end_headers()
+    def guess_type(self, path):
+        if path.lower().endswith(".appcache"):
+            return "text/cache-manifest"
+        return super().guess_type(path)
 
 def local_ip():
     output = subprocess.check_output(

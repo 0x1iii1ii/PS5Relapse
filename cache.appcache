@@ -1,5 +1,5 @@
 CACHE MANIFEST
-# 42d2587ffc76c1fb8305e9b2f314f83bcf0b770239c41c00f6b95bea25bf166a
+# 9b5e0a2905ce47d27e544e6fafc809d2b529ce8354e8c404f2177af15d87c1e0
 
 CACHE:
 ./
@@ -40,6 +40,7 @@ offsets/9.60.js
 payloads/elfldr-ps5-1360.elf
 payloads/kexp_2026_05_25.bin
 payloads/pldmgr.elf
+src/appcache.js
 src/firmware.js
 src/kexp.js
 src/main.js

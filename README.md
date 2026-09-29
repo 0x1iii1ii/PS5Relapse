@@ -3,9 +3,10 @@ Supported firmware: 7.00 through 13.60.
 
 ## Usage
 - In the network settings, set Primary DNS to `45.56.67.85` (Recommended)
-- Run `python generate_cache.py` to create `cache.appcache` after changing web assets.
+- Run `python generate_cache.py` to regenerate `cache.appcache` and `service-worker.js` after changing web assets.
 - Run `python serve.py` locally, or open https://ntfargo.github.io/Relapse-Exploit/ on the PS5.
-- The page's AppCache manifest stores the site and payload assets for offline use after the initial online load.
+- The generated AppCache manifest (for legacy browsers) and service worker (for modern browsers) cache the site and payload assets after the initial online load.
+- The page reports cache setup/update errors in its log and waits for the initial cache before starting the exploit.
 - Press the **Jailbreak** button to start the exploit. The payload starts automatically 3 seconds after the jailbreak completes.
 - The default payloads are stored in `payloads/` after a successful run, the ELF loader listens on port `9021`.
 

@@ -26,6 +26,9 @@ function writeEvent(name, detail, type) {
 
 window.writeLog = writeLog;
 window.jb = { mark: writeEvent };
+for (const message of window.appCacheMessages || []) {
+  writeLog(message.message, message.type);
+}
 
 async function getPrimitive() {
   writeLog("Starting WebKit exploit");
@@ -67,8 +70,12 @@ async function run() {
 
 jailbreakButton.addEventListener("click", async () => {
   jailbreakButton.disabled = true;
-  jailbreakButton.textContent = "Starting jailbreak…";
+  jailbreakButton.textContent = "Preparing…";
   try {
+    if (typeof window.waitForAppCacheUpdate === "function") {
+      await window.waitForAppCacheUpdate();
+    }
+    jailbreakButton.textContent = "Starting jailbreak…";
     await run();
     jailbreakButton.textContent = "Jailbreak complete";
   } catch (error) {
